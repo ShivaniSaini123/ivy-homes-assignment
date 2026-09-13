@@ -1,268 +1,299 @@
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/useAuth";
+import { useRouter } from "./hooks/useRouter";
+import { api } from "./services/api";
+
+import LoginPage from "./components/LoginPage";
+import Navbar from "./components/Navbar";
+import ListingsPage from "./pages/ListingsPage";
+import ListingDetailPage from "./pages/ListingDetailPage";
+import RentalsPage from "./pages/RentalsPage";
+import ProjectsPage from "./pages/ProjectsPage";
+import SavedPage from "./pages/SavedPage";
+import InsightsPage from "./pages/InsightsPage";
+
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api/listings";
+const INITIAL_FILTERS = {
+  search: "",
+  bedroom: "all",
+  locality: "all",
+  pricePreset: "all",
+  minPrice: undefined,
+  maxPrice: undefined,
+  propertyType: "all",
+  furnishing: "all",
+  verified: "all",
+  sort: "default"
+};
 
-function App() {
+function PropertyMarketplace() {
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+  const { route, params, navigate } = useRouter();
+
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [search, setSearch] = useState("");
-  const [bhk, setBhk] = useState("all");
-  const [locality, setLocality] = useState("all");
-
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
 
-  const limit = 20;
+  const [metadata, setMetadata] = useState(null);
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
 
-  useEffect(() => {
-    fetchListings();
-  }, [page]);
-
-  async function fetchListings() {
+  // Favorites state synchronized per-user with backend /api/saved
+  const [favorites, setFavorites] = useState(() => {
     try {
-      setLoading(true);
-      setError("");
-
-      const response = await fetch(
-        `${API_URL}?page=${page}&limit=${limit}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch listings");
-      }
-
-      const data = await response.json();
-
-      setListings(data.results || []);
-      setHasMore(data.has_more || false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      const saved = localStorage.getItem("ivy_shortlist");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
     }
-  }
-
-  const localities = [
-    ...new Set(
-      listings
-        .map((listing) => listing.locality)
-        .filter(Boolean)
-    ),
-  ];
-
-  const filteredListings = listings.filter((listing) => {
-    const text = `${listing.apartment_name || ""} ${
-      listing.locality || ""
-    }`.toLowerCase();
-
-    const matchesSearch = text.includes(search.toLowerCase());
-
-    const matchesBhk =
-      bhk === "all" || String(listing.bedroom) === bhk;
-
-    const matchesLocality =
-      locality === "all" || listing.locality === locality;
-
-    return matchesSearch && matchesBhk && matchesLocality;
   });
 
-  function formatPrice(price) {
-    if (!price) return "Price unavailable";
-    return `₹${(price / 100000).toFixed(2)} Lakh`;
-  }
+  // Sync server saved items on mount
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
-  if (loading) {
+    let isCancelled = false;
+    api
+      .getSavedListings()
+      .then((data) => {
+        if (!isCancelled && data?.results && Array.isArray(data.results)) {
+          const serverSet = new Set(data.results.map((l) => l.listing_id));
+          setFavorites(serverSet);
+          localStorage.setItem("ivy_shortlist", JSON.stringify(Array.from(serverSet)));
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load user saved listings from backend:", err.message);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  // Load filter metadata once authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let isCancelled = false;
+    api
+      .getMetadata()
+      .then((data) => {
+        if (!isCancelled) {
+          setMetadata(data);
+        }
+      })
+      .catch((err) => {
+        if (err.status === 401) {
+          logout();
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated, logout]);
+
+  // Toggle favorite with optimistic update & real backend API sync
+  const toggleFavorite = async (id) => {
+    if (!id) return;
+    const exists = favorites.has(id);
+
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (exists) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem("ivy_shortlist", JSON.stringify(Array.from(next)));
+      } catch {
+        // Ignored
+      }
+      return next;
+    });
+
+    try {
+      if (exists) {
+        await api.removeSavedListing(id);
+      } else {
+        await api.saveListing(id);
+      }
+    } catch (err) {
+      console.warn("Could not sync favorite to server:", err.message);
+    }
+  };
+
+  // Main data fetching effect for browse listings
+  useEffect(() => {
+    if (!isAuthenticated || route !== "listings") return;
+
+    let isCancelled = false;
+
+    async function loadListings() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await api.getListings({
+          page,
+          limit: 20,
+          search: filters.search,
+          bedroom: filters.bedroom,
+          locality: filters.locality,
+          minPrice: filters.minPrice,
+          maxPrice: filters.maxPrice,
+          propertyType: filters.propertyType,
+          furnishing: filters.furnishing,
+          verified: filters.verified,
+          sort: filters.sort
+        });
+
+        if (!isCancelled) {
+          setListings(data.results || []);
+          setTotalPages(data.totalPages || 1);
+          setTotalResults(data.total || 0);
+        }
+      } catch (err) {
+        if (err.status === 401) {
+          logout();
+          return;
+        }
+        if (!isCancelled) {
+          setError(err.message || "Failed to load listings");
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    const delay = filters.search ? 300 : 0;
+    const timer = setTimeout(() => {
+      loadListings();
+    }, delay);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [page, filters, isAuthenticated, route, logout]);
+
+  const handleFilterChange = (updates) => {
+    setFilters((prev) => ({ ...prev, ...updates }));
+    setPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setFilters(INITIAL_FILTERS);
+    setPage(1);
+  };
+
+  const handleHeroSearch = () => {
+    const resultsElem = document.getElementById("results-section");
+    if (resultsElem) {
+      resultsElem.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  // Guard: Authenticating initial session
+  if (authLoading) {
     return (
-      <div className="center-message">
-        <h2>Loading properties...</h2>
+      <div className="auth-loading-screen">
+        <div className="auth-spinner" />
+        <span className="auth-loading-text">Verifying secure session...</span>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="center-message">
-        <h2>Something went wrong</h2>
-        <p>{error}</p>
-        <button onClick={fetchListings}>Retry</button>
-      </div>
-    );
+  // Guard: Unauthenticated state
+  if (!isAuthenticated) {
+    return <LoginPage />;
   }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div>
-          <h1>Ivy Homes</h1>
-          <p>Find your perfect home</p>
-        </div>
-      </header>
+    <div className="app-root-dark">
+      {/* Sticky Dark Navbar */}
+      <Navbar
+        currentRoute={route}
+        onNavigate={navigate}
+        favoriteCount={favorites.size}
+        totalProperties={metadata?.totalProperties || totalResults}
+        user={user}
+        onLogout={logout}
+      />
 
-      <main className="container">
-        <section className="hero">
-          <h2>Find a home you'll love</h2>
-          <p>
-            Browse verified property listings across popular localities.
-          </p>
-        </section>
+      {/* Main Routed Content Area */}
+      {route === "listings" && (
+        <ListingsPage
+          listings={listings}
+          loading={loading}
+          error={error}
+          page={page}
+          totalPages={totalPages}
+          totalResults={totalResults}
+          metadata={metadata}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onResetFilters={handleResetFilters}
+          onPageChange={(p) => {
+            setPage(p);
+            window.scrollTo({ top: 380, behavior: "smooth" });
+          }}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+          onSelectProperty={(p) => navigate(`/listings/${p.listing_id}`)}
+          onHeroSearch={handleHeroSearch}
+        />
+      )}
 
-        <section className="filters">
-          <input
-            type="text"
-            placeholder="Search apartment or locality..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {route === "listing-detail" && (
+        <ListingDetailPage
+          id={params.id}
+          onNavigate={navigate}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
 
-          <select
-            value={bhk}
-            onChange={(e) => setBhk(e.target.value)}
-          >
-            <option value="all">All BHK</option>
-            <option value="1">1 BHK</option>
-            <option value="2">2 BHK</option>
-            <option value="3">3 BHK</option>
-            <option value="4">4 BHK</option>
-          </select>
+      {route === "rentals" && <RentalsPage onNavigate={navigate} />}
 
-          <select
-            value={locality}
-            onChange={(e) => setLocality(e.target.value)}
-          >
-            <option value="all">All Localities</option>
+      {route === "projects" && <ProjectsPage onNavigate={navigate} />}
 
-            {localities.map((area) => (
-              <option key={area} value={area}>
-                {area}
-              </option>
-            ))}
-          </select>
+      {route === "saved" && (
+        <SavedPage
+          onNavigate={navigate}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
+        />
+      )}
 
-          <button
-            className="clear-button"
-            onClick={() => {
-              setSearch("");
-              setBhk("all");
-              setLocality("all");
-            }}
-          >
-            Clear
-          </button>
-        </section>
+      {route === "insights" && <InsightsPage onNavigate={navigate} />}
 
-        <div className="results-header">
-          <h2>Available Properties</h2>
-          <span>{filteredListings.length} properties</span>
-        </div>
-
-        {filteredListings.length === 0 ? (
-          <div className="empty">
-            <h3>No properties found</h3>
-            <p>Try changing your search or filters.</p>
+      {/* Dark Footer */}
+      <footer className="dark-footer">
+        <div className="dark-footer-inner">
+          <div className="footer-brand">
+            <span className="footer-title">Ivy Homes</span>
+            <span className="footer-desc">Direct verified property listings across Chennai</span>
           </div>
-        ) : (
-          <section className="listing-grid">
-            {filteredListings.map((listing) => (
-              <article
-                className="listing-card"
-                key={listing.listing_id}
-              >
-                <div className="card-top">
-                  <span className="badge">
-                    {listing.bedroom} BHK
-                  </span>
-
-                  {listing.is_verified && (
-                    <span className="verified">
-                      ✓ Verified
-                    </span>
-                  )}
-                </div>
-
-                <h3>{listing.apartment_name}</h3>
-
-                <p className="locality">
-                  📍 {listing.locality}
-                </p>
-
-                <div className="price">
-                  {formatPrice(listing.price)}
-                </div>
-
-                <div className="details">
-                  <span>
-                    🛏 {listing.bedroom} BHK
-                  </span>
-
-                  <span>
-                    🛁 {listing.bathroom || "-"} Bath
-                  </span>
-
-                  <span>
-                    📐 {listing.carpet_area || "-"} sq.ft
-                  </span>
-                </div>
-
-                <div className="extra-details">
-                  <p>
-                    <strong>Furnishing:</strong>{" "}
-                    {listing.furnishing || "N/A"}
-                  </p>
-
-                  <p>
-                    <strong>Parking:</strong>{" "}
-                    {listing.covered_parking || 0}
-                  </p>
-
-                  <p>
-                    <strong>Floor:</strong>{" "}
-                    {listing.floor || "N/A"}
-                  </p>
-                </div>
-
-                <div className="card-footer">
-                  <span>
-                    Posted by {listing.posted_by_name || "Unknown"}
-                  </span>
-
-                  {listing.listing_url && (
-                    <a
-                      href={listing.listing_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      View
-                    </a>
-                  )}
-                </div>
-              </article>
-            ))}
-          </section>
-        )}
-
-        <div className="pagination">
-          <button
-            disabled={page === 1}
-            onClick={() => setPage(page - 1)}
-          >
-            ← Previous
-          </button>
-
-          <span>Page {page}</span>
-
-          <button
-            disabled={!hasMore}
-            onClick={() => setPage(page + 1)}
-          >
-            Next →
-          </button>
+          <div className="footer-copyright">
+            © 2026 Ivy Homes Technologies Pvt. Ltd. All rights reserved.
+          </div>
         </div>
-      </main>
+      </footer>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <PropertyMarketplace />
+    </AuthProvider>
+  );
+}

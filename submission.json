@@ -1,0 +1,332 @@
+{
+  "api_key": "IVY26-5E38C38ED8DB",
+  "candidate": {
+    "name": "Shivani Saini",
+    "email": "sainishivani060905@gmail.com",
+    "repo_url": "https://github.com/ShivaniSaini123/ivy-homes-assignment",
+    "demo_url": "https://ivy-homes-assignment.vercel.app"
+  },
+  "answers": {
+    "total_listing_records": 4100,
+    "unique_properties": 3222,
+    "active_listings": 3233,
+    "corrupt_listing_ids": [
+      "100-4000397",
+      "100-4000449",
+      "100-4000457",
+      "100-4000491",
+      "100-4000545",
+      "100-4000738",
+      "100-4001484",
+      "100-4001530",
+      "100-4001703",
+      "100-4001961",
+      "100-4002961",
+      "DWE-4000236",
+      "DWE-4000307",
+      "DWE-4000412",
+      "DWE-4000745",
+      "DWE-4000824",
+      "DWE-4001368",
+      "DWE-4001410",
+      "DWE-4001424",
+      "DWE-4001442",
+      "DWE-4002105",
+      "DWE-4002247",
+      "DWE-4002374",
+      "DWE-4002712",
+      "DWE-4002806",
+      "DWE-4003067",
+      "MAG-4000075",
+      "MAG-4000145",
+      "MAG-4000283",
+      "MAG-4000675",
+      "MAG-4000870",
+      "MAG-4001467",
+      "MAG-4001981",
+      "MAG-4002092",
+      "MAG-4002776",
+      "MAG-4003100",
+      "SQU-4000308",
+      "SQU-4000459",
+      "SQU-4000583",
+      "SQU-4001225",
+      "SQU-4001342",
+      "SQU-4002391",
+      "SQU-4002483",
+      "SQU-4002544",
+      "ZER-4000021",
+      "ZER-4001161",
+      "ZER-4001287",
+      "ZER-4001669",
+      "ZER-4001686",
+      "ZER-4001726",
+      "ZER-4002091",
+      "ZER-4002305",
+      "ZER-4002352",
+      "ZER-4002683"
+    ],
+    "total_monthly_rent": 5330500,
+    "avg_price_per_sqft_2bhk": 16167.1,
+    "costliest_project": {
+      "project_id": "P40224",
+      "price_max_inr": 37800000
+    },
+    "listings_last_7_days": 122,
+    "fake_listing_ids": [
+      "100-4001895",
+      "100-4002380",
+      "100-4002897",
+      "100-4002933",
+      "100-4003175",
+      "DWE-4000107",
+      "DWE-4001506",
+      "DWE-4002164",
+      "DWE-4002443",
+      "DWE-4002600",
+      "MAG-4002533",
+      "MAG-4003071",
+      "SQU-4000104",
+      "SQU-4001233",
+      "SQU-4002904",
+      "ZER-4001595",
+      "ZER-4001598",
+      "ZER-4001714"
+    ],
+    "projects_with_wrong_listing_count": 336
+  },
+  "findings": [
+    {
+      "endpoint": "GET /v1/favourites",
+      "category": "missing_endpoint",
+      "documented": "Documented as GET /v1/favourites, POST /v1/favourites, and DELETE /v1/favourites/{id}",
+      "actual": "HTTP 404 Not Found. The active endpoints on the API are GET /v1/saved, POST /v1/saved (with body {\"listing_id\": ...}), and DELETE /v1/saved/:id.",
+      "how_found": "Sent requests to /v1/favourites which resulted in 404 Not Found; probed and validated /v1/saved which returned 200 OK and persists user favourites correctly.",
+      "impact": "Clients following documentation fail to load or save shortlisted properties unless redirected to /v1/saved.",
+      "evidence": [
+        "GET /v1/favourites -> 404",
+        "POST /v1/favourites -> 404",
+        "GET /v1/saved -> 200",
+        "POST /v1/saved -> 201"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listing/{listing_id}",
+      "category": "missing_endpoint",
+      "documented": "Documented with singular noun GET /v1/listing/{listing_id}",
+      "actual": "HTTP 404 Not Found. The real server requires plural noun GET /v1/listings/{listing_id}.",
+      "how_found": "Sent GET request to /v1/listing/100-4000001 which failed with 404; /v1/listings/100-4000001 succeeded with 200 OK.",
+      "impact": "Listing detail lookups fail with 404 if using the documented endpoint.",
+      "evidence": [
+        "GET /v1/listing/100-4000001 -> 404",
+        "GET /v1/listings/100-4000001 -> 200"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings/{listing_id}/similar",
+      "category": "missing_endpoint",
+      "documented": "Documented as GET /v1/listings/{listing_id}/similar returning algorithmically similar properties.",
+      "actual": "HTTP 404 Not Found for all listings. The remote API has not implemented this endpoint.",
+      "how_found": "Tested GET /v1/listings/:id/similar across valid listing IDs with valid authentication headers; received 404 Not Found.",
+      "impact": "Frontend must fall back to backend-calculated similar properties based on locality, bedroom count, and price range.",
+      "evidence": [
+        "100-4000001",
+        "100-4000002",
+        "100-4000003"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/analytics/summary",
+      "category": "missing_endpoint",
+      "documented": "Documented as GET /v1/analytics/summary returning pre-calculated platform KPIs.",
+      "actual": "HTTP 404 Not Found. Endpoint is not implemented on the server.",
+      "how_found": "Sent authenticated GET request to /v1/analytics/summary with valid API key; received 404 Not Found.",
+      "impact": "Backend service must synthesize platform metrics (total listings, median price, median price/sqft, locality & BHK distributions) dynamically from catalog data.",
+      "evidence": [
+        "GET /v1/analytics/summary -> 404"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings",
+      "category": "pagination",
+      "documented": "Documented as accepting 'page' query parameter (e.g., ?page=2).",
+      "actual": "The API ignores 'page' and always returns the first page of results. Pagination strictly requires 'offset' and 'limit' (with limit capped at 50).",
+      "how_found": "Queried ?page=2 and ?page=3 and observed identical records starting from index 0. Verified ?offset=20&limit=20 returns records 20-39.",
+      "impact": "Applications using page-based query parameters remain stuck on page 1 indefinitely.",
+      "evidence": [
+        "GET /v1/listings?page=1 returns IDs starting with 100-4000001",
+        "GET /v1/listings?page=2 returns IDs starting with 100-4000001",
+        "GET /v1/listings?offset=20 returns IDs starting with 100-4000022"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings",
+      "category": "completeness",
+      "documented": "API response body metadata reports 'total: 3830'.",
+      "actual": "The API continues returning active listings past offset 3830 all the way to offset 4099 (4,100 total retrievable records).",
+      "how_found": "Paginated past the reported total 3830; valid listing objects continued returning until offset 4100 where an empty array was returned.",
+      "impact": "Clients that stop pagination upon reaching reported total miss 270 sale listings (6.6% of inventory).",
+      "evidence": [
+        "100-4003831",
+        "ZER-4004100"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings",
+      "category": "data_quality",
+      "documented": "Clean, verified residential property listings with accurate physical and geospatial dimensions.",
+      "actual": "Exactly 54 listing records contain impossible or corrupt data across 6 distinct categories of 9 records each: negative/zero prices (9), rent in price field < 100k (9), floor > total_floors (9), carpet_area > super_built_up_area (9), swapped coordinates lat > 70 lon < 20 in Arctic Ocean (9), and future posted dates up to 2027 (9).",
+      "how_found": "Ran multi-field data validation across all 4,100 retrievable records.",
+      "impact": "Distorts analytics, price per sqft calculations, map rendering, and price sorting unless sanitized.",
+      "evidence": [
+        "100-4000397",
+        "100-4000449",
+        "100-4000457",
+        "100-4000491",
+        "100-4000545",
+        "100-4000738",
+        "100-4001484",
+        "100-4001530",
+        "100-4001703",
+        "100-4001961",
+        "100-4002961",
+        "DWE-4000236",
+        "DWE-4000307",
+        "DWE-4000412",
+        "DWE-4000745",
+        "DWE-4000824",
+        "DWE-4001368",
+        "DWE-4001410",
+        "DWE-4001424",
+        "DWE-4001442"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings",
+      "category": "fraud",
+      "documented": "Legitimate real estate listings posted by verified property owners and certified agents.",
+      "actual": "18 listings posted across 7 repeating contact numbers explicitly solicit advance scam payments ('Pay a token amount of Rs 25,000 today to block the unit before someone else takes it') for prime apartments at below-market rates.",
+      "how_found": "Text pattern extraction on listing descriptions cross-referenced against seller contact numbers.",
+      "impact": "Severe fraud risk for platform users and misleads market price benchmarking.",
+      "evidence": [
+        "100-4001895",
+        "100-4002380",
+        "100-4002897",
+        "100-4002933",
+        "100-4003175",
+        "DWE-4000107",
+        "DWE-4001506",
+        "DWE-4002164",
+        "DWE-4002443",
+        "DWE-4002600",
+        "MAG-4002533",
+        "MAG-4003071",
+        "SQU-4000104",
+        "SQU-4001233",
+        "SQU-4002904",
+        "ZER-4001595",
+        "ZER-4001598",
+        "ZER-4001714"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/projects",
+      "category": "units",
+      "documented": "Documentation implies uniform numerical pricing across projects.",
+      "actual": "Projects use mixed price units without unit indicators: values < 25 represent Crores (e.g., 3.78 Cr for Shriram Serenity), while values >= 25 represent Lakhs (e.g., 99.8 L for Century Habitat).",
+      "how_found": "Cross-referenced project price values with corresponding individual apartment listings.",
+      "impact": "Sorting by raw price_max displays 99.8 Lakhs as higher than 3.78 Crores unless normalized.",
+      "evidence": [
+        "P40224",
+        "P40441",
+        "P40071",
+        "P40192",
+        "P40451",
+        "P40231",
+        "P40312",
+        "P40414"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings",
+      "category": "units",
+      "documented": "Carpet area and super built-up area are documented as square feet.",
+      "actual": "Listings from 'magichomes' (MAG-* IDs) report area values in square meters (values range 65 - 180 m² for 2-3 BHK flats) rather than square feet (700 - 1900 sqft).",
+      "how_found": "Inspected area distributions across the 5 portal sources; MagicHomes areas are 10x smaller than other portals.",
+      "impact": "Average price per sqft is distorted to ~₹95,000/sqft for MagicHomes properties unless normalized (1 m² = 10.7639 sq ft).",
+      "evidence": [
+        "MAG-4000001",
+        "MAG-4000015",
+        "MAG-4000032",
+        "MAG-4000045",
+        "MAG-4000062",
+        "MAG-4000088",
+        "MAG-4000102",
+        "MAG-4000119",
+        "MAG-4000135",
+        "MAG-4000150"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/projects",
+      "category": "consistency",
+      "documented": "'total_listings' represents the count of available listings in the project.",
+      "actual": "For 336 out of 460 projects (73%), the reported total_listings field does not match the actual number of listings linked to that project_id in /v1/listings.",
+      "how_found": "Aggregated listings by project_id and joined against projects catalog.",
+      "impact": "Project cards display inaccurate listing counts to users.",
+      "evidence": [
+        "P40001",
+        "P40002",
+        "P40003",
+        "P40004",
+        "P40005",
+        "P40006",
+        "P40007",
+        "P40008",
+        "P40009",
+        "P40010",
+        "P40011",
+        "P40012",
+        "P40013",
+        "P40014",
+        "P40015",
+        "P40016",
+        "P40017",
+        "P40018",
+        "P40019",
+        "P40020"
+      ]
+    },
+    {
+      "endpoint": "GET /v1/listings",
+      "category": "duplicates",
+      "documented": "Each listing record is presented as a distinct property.",
+      "actual": "The 4,100 retrievable listing records represent only 3,222 unique physical properties. Multiple portals (100acres, dwello, magichomes, squareyards, zerozerobroker) syndicate the same physical unit with matching floor, direction, bedrooms, and building name.",
+      "how_found": "Computed normalized physical property hash across building name, locality, property type, BHK, bathroom, floor, total floors, and facing direction.",
+      "impact": "Catalog appears 27.2% larger than actual physical inventory, and duplicate cards appear in search results.",
+      "evidence": [
+        "100-4000001",
+        "DWE-4000001",
+        "MAG-4000001",
+        "SQU-4000001",
+        "ZER-4000001",
+        "100-4000012",
+        "DWE-4000015",
+        "MAG-4000018",
+        "100-4000025",
+        "SQU-4000029"
+      ]
+    },
+    {
+      "endpoint": "POST /auth/logout",
+      "category": "auth",
+      "documented": "Invalidates the session token on the server.",
+      "actual": "Returns HTTP 200 with message 'tokens are stateless'. The token remains fully valid on the server until expiration.",
+      "how_found": "Called POST /auth/logout and subsequently executed authenticated requests to /v1/me successfully using the logged-out token.",
+      "impact": "Backend and frontend must handle session termination locally via cookie clearing.",
+      "evidence": [
+        "POST /auth/logout response: {\"message\": \"Logged out successfully. Note that tokens are stateless.\"}"
+      ]
+    }
+  ]
+}
