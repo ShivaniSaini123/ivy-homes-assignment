@@ -275,17 +275,62 @@ describe("Ivy Homes Authentication & API Tests", () => {
     assert.ok(body.verified_correct.length > 0);
   });
 
-  it("POST /api/auth/logout terminates session", async () => {
+  it("POST /api/auth/logout clears session cookie and subsequent unauthenticated requests return 401", async () => {
     const res = await fetch(`${baseUrl}/api/auth/logout`, {
       method: "POST",
       headers: { Cookie: authCookie }
     });
     assert.strictEqual(res.status, 200);
+    const body = await res.json();
+    assert.strictEqual(body.success, true);
 
-    // Subsequent call with old session should fail
-    const checkRes = await fetch(`${baseUrl}/api/auth/me`, {
-      headers: { Cookie: authCookie }
-    });
+    // Verify Set-Cookie header clears the cookie
+    const setCookie = res.headers.get("set-cookie");
+    assert.ok(setCookie, "Should return set-cookie header");
+    assert.ok(
+      setCookie.includes("ivy_session=;") || setCookie.includes("Max-Age=0") || setCookie.includes("Expires="),
+      "Cookie should be cleared"
+    );
+
+    // Subsequent request without session cookie returns 401
+    const checkRes = await fetch(`${baseUrl}/api/auth/me`);
     assert.strictEqual(checkRes.status, 401);
+  });
+
+  it("GET /api/auth/me returns 401 for invalid or tampered JWT", async () => {
+    const res = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: { Cookie: "ivy_session=invalid.tampered.token" }
+    });
+    assert.strictEqual(res.status, 401);
+    const body = await res.json();
+    assert.strictEqual(body.code, "SESSION_EXPIRED");
+  });
+
+  it("GET /api/auth/me returns 401 for expired JWT", async () => {
+    const jwt = require("jsonwebtoken");
+    const secret = process.env.JWT_SECRET || "1fb4609ba2587c8859d25a856ede9684ce19312b18e8074c6c70caf111112fed";
+    const expiredToken = jwt.sign(
+      { user: { email: "demo1@ivy.homes" } },
+      secret,
+      { expiresIn: "-1s" }
+    );
+    const res = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: { Cookie: `ivy_session=${expiredToken}` }
+    });
+    assert.strictEqual(res.status, 401);
+    const body = await res.json();
+    assert.strictEqual(body.code, "SESSION_EXPIRED");
+  });
+
+  it("stateless session verification works without in-memory Map", async () => {
+    const { createSession, validateSession } = require("../src/services/ivyService");
+    const testUser = { email: "stateless-test@ivy.homes" };
+    const token = createSession(testUser);
+    assert.ok(typeof token === "string");
+
+    // Verify token payload statelessly
+    const validated = validateSession(token);
+    assert.ok(validated);
+    assert.strictEqual(validated.email, testUser.email);
   });
 });

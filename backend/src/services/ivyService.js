@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 
 const API_BASE_URL = process.env.IVY_BASE_URL || "https://solve.ivy.homes";
 const API_KEY = process.env.IVY_API_KEY || "IVY26-5E38C38ED8DB";
@@ -11,33 +12,53 @@ let accessToken = null;
 let refreshToken = null;
 let tokenExpiresAt = 0; // Timestamp in milliseconds
 
-// In-memory application session store
-const activeSessions = new Map();
-
-function createSession(user) {
-  const sessionId = crypto.randomUUID();
-  activeSessions.set(sessionId, {
-    user,
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
-  });
-  return sessionId;
+/**
+ * Retrieve JWT secret with safe production failure handling
+ */
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("JWT_SECRET environment variable is missing in production");
+    }
+    console.warn("WARNING: JWT_SECRET environment variable is not set. Using temporary development secret.");
+    return "dev_fallback_secret_ivy_homes_do_not_use_in_prod";
+  }
+  return secret;
 }
 
+/**
+ * Create a signed stateless JWT containing the user payload, expiring in 24 hours
+ */
+function createSession(user) {
+  const secret = getJwtSecret();
+  return jwt.sign(
+    { user },
+    secret,
+    { expiresIn: "24h" }
+  );
+}
+
+/**
+ * Verify signed JWT session token and return user if valid; returns null if expired or invalid
+ */
 function validateSession(sessionId) {
-  if (!sessionId) return null;
-  const session = activeSessions.get(sessionId);
-  if (!session) return null;
-  if (Date.now() > session.expiresAt) {
-    activeSessions.delete(sessionId);
+  if (!sessionId || typeof sessionId !== "string") return null;
+  try {
+    const secret = getJwtSecret();
+    const decoded = jwt.verify(sessionId, secret);
+    return decoded.user || decoded;
+  } catch (err) {
+    // Return null without throwing or crashing the server
     return null;
   }
-  return session.user;
 }
 
-function destroySession(sessionId) {
-  if (sessionId) {
-    activeSessions.delete(sessionId);
-  }
+/**
+ * Stateless session destruction placeholder (handled by cookie clearance on client)
+ */
+function destroySession(_sessionId) {
+  // Stateless JWT: logout is handled client-side by clearing the cookie
 }
 
 /**

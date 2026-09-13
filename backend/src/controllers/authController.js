@@ -18,11 +18,15 @@ async function loginUser(req, res) {
     const { user, sessionId } = await authenticateUser(email, password);
 
     // Set secure HTTP-only cookie
+    const isProduction = process.env.NODE_ENV === "production";
+    const sameSitePolicy = process.env.COOKIE_SAME_SITE || "lax";
+
     res.cookie("ivy_session", sessionId, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      secure: isProduction,
+      sameSite: sameSitePolicy,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: "/"
     });
 
     res.json({
@@ -61,9 +65,14 @@ async function logoutUser(req, res) {
     destroySession(sessionId);
   }
 
+  const isProduction = process.env.NODE_ENV === "production";
+  const sameSitePolicy = process.env.COOKIE_SAME_SITE || "lax";
+
   res.clearCookie("ivy_session", {
     httpOnly: true,
-    sameSite: "lax"
+    secure: isProduction,
+    sameSite: sameSitePolicy,
+    path: "/"
   });
 
   res.json({
