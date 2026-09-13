@@ -1,0 +1,21 @@
+warning: in the working copy of '.env.example', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/.env.example b/.env.example[m
+[1mindex 029d4ca..45aecee 100644[m
+[1m--- a/.env.example[m
+[1m+++ b/.env.example[m
+[36m@@ -1,5 +1,8 @@[m
+[31m-PORT=5000[m
+[31m-IVY_BASE_URL=https://solve.ivy.homes[m
+[31m-IVY_API_KEY=IVY26-5E38C38ED8DB[m
+[31m-IVY_EMAIL=demo1@ivy.homes[m
+[31m-IVY_PASSWORD=305dc2b341[m
+\ No newline at end of file[m
+[32m+[m[32mPORT=5000[m
+[32m+[m[32mIVY_BASE_URL=https://solve.ivy.homes[m
+[32m+[m[32mIVY_API_KEY=IVY26-5E38C38ED8DB[m
+[32m+[m[32mIVY_EMAIL=demo1@ivy.homes[m
+[32m+[m[32mIVY_PASSWORD=305dc2b341[m
+[32m+[m[32mJWT_SECRET=your_production_jwt_secret_min_32_characters[m
+[32m+[m[32mCORS_ORIGIN=https://ivy-homes-assignment.vercel.app[m
+[32m+[m[32mCOOKIE_SAME_SITE=lax[m
+\ No newline at end of file[m

@@ -123,7 +123,7 @@ Beyond UI delivery, this repository features an in-depth data integrity evaluati
 
 ## 5. Environment Variables
 
-All sensitive credentials and API keys are stored strictly in `backend/.env`. This file is listed in `.gitignore` and is never committed to source control.
+All sensitive credentials, API keys, and signing secrets are stored strictly in `backend/.env`. This file is listed in `.gitignore` and is never committed to source control.
 
 Create `backend/.env` based on `.env.example`:
 
@@ -134,9 +134,12 @@ IVY_BASE_URL=https://solve.ivy.homes
 IVY_API_KEY=IVY26-5E38C38ED8DB
 IVY_EMAIL=demo1@ivy.homes
 IVY_PASSWORD=305dc2b341
+JWT_SECRET=your_production_jwt_secret_min_32_characters
+CORS_ORIGIN=https://ivy-homes-assignment.vercel.app
+COOKIE_SAME_SITE=lax
 ```
 
-> **Security Guarantee**: The frontend has zero access to `IVY_API_KEY` or `IVY_PASSWORD`. Vite proxies `/api` requests to `http://localhost:5000`, keeping credentials server-bound.
+> **Security Guarantee**: The frontend has zero access to `IVY_API_KEY`, `IVY_PASSWORD`, or `JWT_SECRET`. Vite proxies `/api` requests to `http://localhost:5000` (or uses same-origin rewrites on Vercel), keeping credentials and signing secrets server-bound.
 
 ---
 
@@ -222,10 +225,11 @@ The platform implements a **Dual-Tier Zero-Trust Authentication Architecture**:
 
 ### Tier 1: Client ↔ Backend (`ivy_session`)
 1. The user logs in via the UI with email and password (`POST /api/auth/login`).
-2. The backend verifies credentials, initializes a secure in-memory session, and sets an `HttpOnly`, `SameSite=Lax` cookie named `ivy_session`.
-3. All catalog endpoints (`/api/listings`, `/api/rentals`, `/api/projects`, `/api/saved`, `/api/analytics`) require this cookie via the `requireAuth` middleware.
-4. On browser reload, the client calls `GET /api/auth/me`. If the session is active, the user state is restored immediately without showing a login screen.
-5. `POST /api/auth/logout` clears the session cookie and destroys the backend session.
+2. The backend verifies credentials against the upstream API, signs a 24-hour stateless JSON Web Token (JWT) with `JWT_SECRET`, and sets a secure `HttpOnly`, `SameSite=Lax` cookie named `ivy_session` (`secure: true` in production, `path: "/"`).
+3. All catalog endpoints (`/api/listings`, `/api/rentals`, `/api/projects`, `/api/saved`, `/api/analytics`) require this cookie or an `Authorization: Bearer` token via the `requireAuth` middleware.
+4. Because the token is stateless, it persists reliably across ephemeral Vercel serverless function instances without relying on server-local in-memory storage.
+5. On browser reload, the client calls `GET /api/auth/me`. If the JWT signature is valid and non-expired, the user state is restored immediately with a dedicated loading state, preventing premature redirection to `/login`.
+6. `POST /api/auth/logout` clears the `ivy_session` cookie in the client browser with matching security flags. Subsequent unauthenticated requests are rejected with `401`.
 
 ### Tier 2: Backend ↔ Upstream Ivy API (`solve.ivy.homes`)
 1. The backend authenticates to `POST /auth/login` using `IVY_EMAIL`, `IVY_PASSWORD`, and `X-API-Key: IVY_API_KEY`.

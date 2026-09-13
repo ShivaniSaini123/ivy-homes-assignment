@@ -4,14 +4,7 @@ import { AuthContext } from "./authContextDef";
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem("ivy_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -24,13 +17,27 @@ export function AuthProvider({ children }) {
       if (res.ok) {
         const data = await res.json();
         setUser(data.user);
-        localStorage.setItem("ivy_user", JSON.stringify(data.user));
+        try {
+          localStorage.setItem("ivy_user", JSON.stringify(data.user));
+        } catch {
+          // Ignored
+        }
       } else {
         setUser(null);
-        localStorage.removeItem("ivy_user");
+        try {
+          localStorage.removeItem("ivy_user");
+        } catch {
+          // Ignored
+        }
       }
     } catch (err) {
       console.warn("Session check failed (network/offline):", err.message);
+      setUser(null);
+      try {
+        localStorage.removeItem("ivy_user");
+      } catch {
+        // Ignored
+      }
     } finally {
       setLoading(false);
     }
@@ -38,19 +45,27 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let isCancelled = false;
-    fetch(`${API_BASE}/auth/me`, { credentials: "include" })
-      .then((res) => {
-        if (res.ok) return res.json();
-        return null;
-      })
+
+    fetch(`${API_BASE}/auth/me`, {
+      credentials: "include"
+    })
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!isCancelled) {
           if (data?.user) {
             setUser(data.user);
-            localStorage.setItem("ivy_user", JSON.stringify(data.user));
+            try {
+              localStorage.setItem("ivy_user", JSON.stringify(data.user));
+            } catch {
+              // Ignored
+            }
           } else {
             setUser(null);
-            localStorage.removeItem("ivy_user");
+            try {
+              localStorage.removeItem("ivy_user");
+            } catch {
+              // Ignored
+            }
           }
           setLoading(false);
         }
@@ -58,6 +73,12 @@ export function AuthProvider({ children }) {
       .catch((err) => {
         console.warn("Session check failed (network/offline):", err.message);
         if (!isCancelled) {
+          setUser(null);
+          try {
+            localStorage.removeItem("ivy_user");
+          } catch {
+            // Ignored
+          }
           setLoading(false);
         }
       });
@@ -88,7 +109,12 @@ export function AuthProvider({ children }) {
       }
 
       setUser(data.user);
-      localStorage.setItem("ivy_user", JSON.stringify(data.user));
+      try {
+        localStorage.setItem("ivy_user", JSON.stringify(data.user));
+      } catch {
+        // Ignored
+      }
+      setLoading(false);
       return data.user;
     } catch (err) {
       setError(err.message || "An error occurred during sign in");
@@ -106,7 +132,12 @@ export function AuthProvider({ children }) {
       console.warn("Logout request error:", err.message);
     } finally {
       setUser(null);
-      localStorage.removeItem("ivy_user");
+      try {
+        localStorage.removeItem("ivy_user");
+      } catch {
+        // Ignored
+      }
+      setLoading(false);
     }
   };
 

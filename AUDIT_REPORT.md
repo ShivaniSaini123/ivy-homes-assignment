@@ -30,9 +30,9 @@
 | **Ten answers calculated** | `[PASS]` | All 10 questions calculated from complete datasets available to API key without guesswork or estimation. |
 | **submission.json** | `[PASS]` | Root file created and validated with exact candidate info, answers dictionary, and findings array. |
 | **README** | `[PASS]` | Root README updated with all 22 required sections, architectural diagrams, and reproduction evidence. |
-| **npm test** | `[PASS]` | Backend: 18/18 tests passing (100%). Frontend: 10/10 formatters tests passing (100%). |
+| **npm test** | `[PASS]` | Backend: 21/21 tests passing (100%). Frontend: 10/10 formatters tests passing (100%). |
 | **npm run lint** | `[PASS]` | Oxlint executed across all frontend files: 0 warnings, 0 errors. |
-| **npm run build** | `[PASS]` | Vite production build compiled clean bundle (`dist/`) in 1.38s with zero errors. |
+| **npm run build** | `[PASS]` | Vite production build compiled clean bundle (`dist/`) in 1.46s with zero errors. |
 
 ---
 
@@ -61,9 +61,12 @@ ok 14 - GET /api/projects returns paginated projects catalog
 ok 15 - POST /api/saved and GET /api/saved manages user saved listings
 ok 16 - GET /api/analytics/summary returns accurate statistical breakdown
 ok 17 - GET /api/insights returns all 10 assignment questions, findings, and verified hypotheses
-ok 18 - POST /api/auth/logout terminates session
+ok 18 - POST /api/auth/logout clears session cookie and subsequent unauthenticated requests return 401
+ok 19 - GET /api/auth/me returns 401 for invalid or tampered JWT
+ok 20 - GET /api/auth/me returns 401 for expired JWT
+ok 21 - stateless session verification works without in-memory Map
 
-# tests 18 | suites 1 | pass 18 | fail 0 | duration_ms 1149.2
+# tests 21 | suites 1 | pass 21 | fail 0
 ```
 
 ### Frontend Test & Lint Execution
